@@ -49,11 +49,17 @@ function parseCsvLine(line) {
 fs.mkdirSync("uploads", { recursive: true });
 const upload = multer({ dest: "uploads/" });
 
+app.get("/health", (_req, res) => {
+    res.json({ ok: true, service: "money-muling-backend" });
+});
+
 app.post("/analyze", upload.single("file"), (req, res) => {
     const startTime = Date.now();
     let uploadedPath = null;
 
     try {
+        console.log("Received /analyze request");
+
         if (!req.file) {
             return res.status(400).json({ error: "No file uploaded. Use form field 'file'." });
         }
@@ -131,17 +137,11 @@ app.post("/analyze", upload.single("file"), (req, res) => {
             }
         };
 
+        console.log(
+            `Analysis done: ${transactions.length} tx, ${suspicious_accounts.length} suspicious, ${rings.length} rings`
+        );
         return res.json(response);
     } catch (error) {
         console.error("Analyze failed:", error);
         return res.status(500).json({ error: "Analysis failed. Check CSV format and try again." });
     } finally {
-        if (uploadedPath) {
-            fs.unlink(uploadedPath, () => {});
-        }
-    }
-});
-
-app.listen(5000, () => {
-    console.log("🚀 Advanced Backend running at http://localhost:5000");
-});
