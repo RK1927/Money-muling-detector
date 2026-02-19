@@ -1,1 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Financial Forensics Engine</title>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg,#0f172a,#1e293b);
+    color: white;
+}
+header {
+    padding: 20px;
+    font-size: 24px;
+    font-weight: bold;
+}
+.dashboard {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+}
+.card {
+    background: rgba(255,255,255,0.05);
+    padding: 20px;
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    flex: 1;
+}
+#network {
+    height: 500px;
+    margin: 20px;
+    border-radius: 12px;
+    background: #0f172a;
+}
+table {
+    width: 95%;
+    margin: 20px;
+    border-collapse: collapse;
+}
+th, td {
+    border: 1px solid #334155;
+    padding: 8px;
+}
+th {
+    background: #2563eb;
+}
+button {
+    margin: 10px;
+    padding: 10px 20px;
+    background: #3b82f6;
+    border: none;
+    color: white;
+    border-radius: 8px;
+}
+</style>
+</head>
+
+<body>
+
+<header>Money Muling Detection System</header>
+
+<input type="file" id="fileInput">
+<button onclick="upload()">Analyze</button>
+<button onclick="downloadJSON()">Download JSON</button>
+
+<div class="dashboard">
+    <div class="card" id="total"></div>
+    <div class="card" id="suspicious"></div>
+    <div class="card" id="rings"></div>
+</div>
+
+<div id="network"></div>
+
+<h2 style="margin-left:20px;">Fraud Rings</h2>
+<table id="ringTable">
+<tr>
+<th>Ring ID</th>
+<th>Pattern</th>
+<th>Members</th>
+<th>Risk</th>
+<th>Accounts</th>
+</tr>
+</table>
+
+<script>
+let lastResult = null;
+
+function upload() {
+    const file = document.getElementById("fileInput").files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+
+    fetch("http://localhost:5000/analyze", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        lastResult = data;
+        renderDashboard(data);
+        renderGraph(data);
+        renderTable(data);
+    });
+}
+
+function renderDashboard(data) {
+    document.getElementById("total").innerHTML =
+        `<h3>Total Accounts</h3><h2>${data.summary.total_accounts_analyzed}</h2>`;
+    document.getElementById("suspicious").innerHTML =
+        `<h3>Suspicious</h3><h2>${data.summary.suspicious_accounts_flagged}</h2>`;
+    document.getElementById("rings").innerHTML =
+        `<h3>Fraud Rings</h3><h2>${data.summary.fraud_rings_detected}</h2>`;
+}
+
+function renderGraph(data) {
+
+    const nodes = [];
+    const edges = [];
+    const suspicious = data.suspicious_accounts;
+
+    suspicious.forEach(acc => {
+        const colorIntensity = acc.suspicion_score * 2;
+        nodes.push({
+            id: acc.account_id,
+            label: acc.account_id,
+            color: `rgb(${colorIntensity},0,0)`,
+            size: 15 + acc.suspicion_score/3,
+            borderWidth: 3,
+            title: `Score: ${acc.suspicion_score}<br>Patterns: ${acc.detected_patterns}`
+        });
+    });
+
+    data.fraud_rings.forEach(ring => {
+        for (let i=0;i<ring.member_accounts.length-1;i++){
+            edges.push({
+                from: ring.member_accounts[i],
+                to: ring.member_accounts[i+1],
+                arrows: "to"
+            });
+        }
+    });
+
+    const container = document.getElementById("network");
+    new vis.Network(container,
+        { nodes: new vis.DataSet(nodes),
+          edges: new vis.DataSet(edges) },
+        { physics: { stabilization: true } }
+    );
+}
+
+function renderTable(data) {
+    const table = document.getElementById("ringTable");
+    table.innerHTML = table.rows[0].outerHTML;
+
+    data.fraud_rings.forEach(ring => {
+        const row = table.insertRow();
+        row.insertCell(0).innerText = ring.ring_id;
+        row.insertCell(1).innerText = ring.pattern_type;
+        row.insertCell(2).innerText = ring.member_accounts.length;
+        row.insertCell(3).innerText = ring.risk_score;
+        row.insertCell(4).innerText = ring.member_accounts.join(", ");
+    });
+}
+
+function downloadJSON() {
+    const blob = new Blob([JSON.stringify(lastResult,null,2)],
+        {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "fraud_analysis.json";
+    a.click();
+}
+</script>
+
+</body>
+</html>
 
